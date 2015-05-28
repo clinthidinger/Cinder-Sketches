@@ -32,29 +32,29 @@
 //
 //----------------------------------------------------------------------------------
 
-#include "cinder/app/AppNative.h"
+#include "cinder/app/App.h"
 #include "cinder/app/RendererGl.h"
 #include "cinder/gl/Shader.h"
 #include "cinder/gl/Batch.h"
 #include "cinder/gl/VboMesh.h"
 #include "cinder/gl/Fbo.h"
 #include "cinder/Camera.h"
-#include "cinder/MayaCamUI.h"
+#include "cinder/CameraUi.h"
 #include "cinder/ImageIo.h"
 #include "cinder/Utilities.h"
 #include "cinder/Rand.h"
 #include "cinder/params/Params.h"
 #include "cinder/gl/Context.h"
-#include "Ssbo.h"
-#include "ScopedBufferBase.h"
+//#include "Ssbo.h"
+//#include "ScopedBufferBase.h"
 
 using namespace ci;
 using namespace ci::app;
 
 
-#define LIGHT_RADIUS	1.5f // Must be at least 1
+//#define LIGHT_RADIUS	1.5f // Must be at least 1
 
-float sfrand()
+inline float sfrand()
 {
 	//return ( ( randFloat() * 2.0f ) - 1.0f );
 	return randPosNegFloat( -1.0f, 1.0f );
@@ -79,15 +79,29 @@ struct ShaderParams
 	}
 };
 
-class NVidiaComputeParticlesApp : public AppNative {
+struct Particle
+{
+    Particle()
+    : pos( 0 ),
+      vel( 0 )
+    {
+    }
+    
+    vec4	pos;
+    vec4	vel;
+};
+
+class NVidiaComputeParticlesApp : public App {
 public:
-	void	setup() override;
-	void	resize() override;
-	void	update() override;
-	void	draw() override;
-	void	mouseDrag( MouseEvent event ) override;
-	void	mouseDown( MouseEvent event ) override;
-	void	prepareSettings( Settings *settings ) override;
+    NVidiaComputeParticlesApp();
+    
+	//void	setup() override;
+	virtual void	resize() override;
+	virtual void	update() override;
+	virtual void	draw() override;
+	virtual void	mouseDrag( MouseEvent event ) override;
+	virtual void	mouseDown( MouseEvent event ) override;
+	//void	prepareSettings( Settings *settings ) override;
 
 	void renderScene( gl::GlslProgRef effect );
 	void setupShaders();
@@ -100,18 +114,28 @@ public:
 
 	enum { WORK_GROUP_SIZE = 128, NUM_PARTICLES = 1 << 18 };
 
-	gl::VboRef mVBO;
-	gl::VboMeshRef teapot;
+	//gl::VboRef mVBO;
+	//gl::VboMeshRef teapot;
 	gl::GlslProgRef mRenderProg;
 	gl::GlslProgRef mUpdateProg;
 
-	SsboT<vec4>::Ref mPos;
-	SsboT<vec4>::Ref mVel;
+	//SsboT<vec4>::Ref mPos;
+	//SsboT<vec4>::Ref mVel;
+    // Descriptions of particle data layout.
+    gl::VaoRef		mAttributes[2];
+    // Buffers holding raw particle data on GPU.
+    //gl::VboRef		mParticleBuffer[2];
+    
+    std::uint32_t	mSourceIndex		= 0;
+    std::uint32_t	mDestinationIndex	= 1;
+    gl::VboRef mParticles[2];
+    //gl::VboRef mVel;
 	gl::VboRef mIndicesVbo;
 
 	gl::Texture3dRef mNoiseTex;
 	params::InterfaceGlRef mParams;
-	MayaCamUI mMayaCam;
+    CameraPersp	mCam;
+	CameraUi mCamUi;
 	ShaderParams mShaderParams;
 	int mNoiseSize;
 	bool mEnableAttractor;
@@ -121,28 +145,29 @@ public:
 	float mPrevElapsedSeconds;
 };
 
-
-void NVidiaComputeParticlesApp::setup()
+NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
+    : mCam( getWindowWidth(), getWindowHeight(), 45.0f, 0.1f, 10.0f ),
+      mCamUi( &mCam ),
+      mEnableAttractor( false ),
+      mAnimate( true ),
+      mReset( false ),
+      mTime( 0.0f ),
+      mPrevElapsedSeconds( 0.0f ),
+      mNoiseSize( 16 )
 {
-	mEnableAttractor = false;
-	mAnimate = true;
-	mReset = false;
-	mTime = 0.0f;
-	mPrevElapsedSeconds = 0.0f;
-	mNoiseSize = 16;
-
+    //ensureAssetDirsPrepared();//addAssetDirectory( "assets" );
 	setupNoiseTexture3D();
 	setupShaders();
 	setupBuffers();
 
 	resetParticleSystem( 0.5f );
 
-	CameraPersp cam( mMayaCam.getCamera() );
-	cam.lookAt( vec3( 0.0f, 0.0f, -3.0f ), vec3( 0 ) );
-	cam.setCenterOfInterestPoint( vec3( 0 ) );
-	cam.setNearClip( 0.10f );
-	cam.setFarClip( 10.0f );
-	mMayaCam.setCurrentCam( cam );
+	//CameraPersp cam( mMayaCam.getCamera() );
+	mCam.lookAt( vec3( 0.0f, 0.0f, -3.0f ), vec3( 0 ) );
+	//mCam.setCenterOfInterestPoint( vec3( 0 ) );
+	//cam.setNearClip( 0.10f );
+	//cam.setFarClip( 10.0f );
+	//mCamUi..setCurrentCam( cam );
 
 	mParams = params::InterfaceGl::create( "Settings", toPixels( ivec2( 225, 180 ) ) );
 	mParams->addSeparator();
@@ -156,11 +181,6 @@ void NVidiaComputeParticlesApp::setup()
 	mParams->addParam( "Reset", &mReset );
 }
 
-void NVidiaComputeParticlesApp::prepareSettings( Settings *settings )
-{
-	settings->setWindowSize( 1280, 720 );
-}
-
 void NVidiaComputeParticlesApp::setupShaders()
 {
 	try {
@@ -169,15 +189,24 @@ void NVidiaComputeParticlesApp::setupShaders()
 	}
 	catch( gl::GlslProgCompileExc e ) {
 		ci::app::console() << e.what() << std::endl;
-		shutdown();
+        quit(); //???
 	}
 
 	try {
-		mUpdateProg = gl::GlslProg::create( gl::GlslProg::Format().shaderStage( loadAsset( "particles.cs.glsl" ), GL_COMPUTE_SHADER ) );
+        mUpdateProg = gl::GlslProg::create( gl::GlslProg::Format()
+                                           .vertex( loadAsset( "particle_update.vs.glsl" ) )
+                                           .feedbackFormat( GL_INTERLEAVED_ATTRIBS )
+                                           .feedbackVaryings( { "position", "velocity" } )
+                                           //.attribLocation( "iPosition", 0 )
+                                           //.attribLocation( "iColor", 1 )
+                                           //.attribLocation( "iPPosition", 2 )
+                                           //.attribLocation( "iHome", 3 )
+                                           //.attribLocation( "iDamping", 4 )
+                                           );
 	}
 	catch( gl::GlslProgCompileExc e ) {
 		ci::app::console() << e.what() << std::endl;
-		shutdown();
+		quit(); //???
 	}
 
 	mUpdateProg->uniform( "invNoiseSize", 1.0f / mNoiseSize );
@@ -186,8 +215,14 @@ void NVidiaComputeParticlesApp::setupShaders()
 
 void NVidiaComputeParticlesApp::setupBuffers()
 {
-	mPos = SsboT<vec4>::create( NUM_PARTICLES, GL_STATIC_DRAW );
-	mVel = SsboT<vec4>::create( NUM_PARTICLES, GL_STATIC_DRAW );
+    std::vector<Particle> particles( NUM_PARTICLES, Particle() );
+    //particles.assign(  );
+	//mPos = SsboT<vec4>::create( NUM_PARTICLES, GL_STATIC_DRAW );
+	//mVel = SsboT<vec4>::create( NUM_PARTICLES, GL_STATIC_DRAW );
+    mParticles[0] = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( Particle ), nullptr/*particles.data()*/, GL_STATIC_DRAW );
+    mParticles[1] = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( Particle ), nullptr/*particles.data()*/, GL_STATIC_DRAW );
+    //mVel = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof(Particle), nullptr, GL_STATIC_DRAW );
+    
 
 	std::vector<uint32_t> indices( NUM_PARTICLES * 6 );
 	// the index buffer is a classic "two-tri quad" array.
@@ -208,15 +243,25 @@ void NVidiaComputeParticlesApp::setupBuffers()
 	}
 
 	mIndicesVbo = gl::Vbo::create<uint32_t>( GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW );
-
+    
+    for( int i = 0; i < 2; ++i )
+    {	// Describe the particle layout for OpenGL.
+        mAttributes[i] = gl::Vao::create();
+        gl::ScopedVao vao( mAttributes[i] );
+        
+        // Define attributes as offsets into the bound particle buffer
+        gl::ScopedBuffer buffer( mParticles[i] );
+        gl::enableVertexAttribArray( 0 );
+        gl::enableVertexAttribArray( 1 );
+        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast< const GLvoid *>( offsetof( Particle, pos ) ) );
+        gl::vertexAttribPointer( 1, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast<const GLvoid *>(offsetof( Particle, vel ) ) );
+    }
 }
 
 void NVidiaComputeParticlesApp::resize()
 {
-	CameraPersp cam( mMayaCam.getCamera() );
-	float vfov = 45.0f;
-	cam.setPerspective( vfov, getWindowAspectRatio(), 0.1f, 10.0f );
-	mMayaCam.setCurrentCam( cam );
+	float vfov = mCam.getFov();
+	mCam.setPerspective( vfov, getWindowAspectRatio(), 0.1f, 10.0f ); //! fix hard code
 }
 
 void NVidiaComputeParticlesApp::update()
@@ -237,7 +282,7 @@ void NVidiaComputeParticlesApp::draw()
 		resetParticleSystem( 0.5f );
 	}
 
-	gl::setMatrices( mMayaCam.getCamera() );
+	gl::setMatrices( mCam );
 
 	// draw particles
 	gl::ScopedGlslProg scopedRenderProg( mRenderProg );
@@ -250,10 +295,10 @@ void NVidiaComputeParticlesApp::draw()
 	gl::disable( GL_DEPTH_TEST );
 	gl::disable( GL_CULL_FACE );
 
-	ScopedBufferBase scopedPosBuffer( mPos, 1 );
+	//ScopedBufferBase scopedPosBuffer( mPos, 1 );
 
 	{
-		gl::ScopedBuffer scopedIndicex( mIndicesVbo );
+        gl::ScopedBuffer scopedIndicex( mIndicesVbo );
 		gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 6, GL_UNSIGNED_INT, 0 );
 	}
 
@@ -265,27 +310,38 @@ void NVidiaComputeParticlesApp::draw()
 
 void NVidiaComputeParticlesApp::mouseDown( MouseEvent event )
 {
-	mMayaCam.mouseDown( event.getPos() );
+	mCamUi.mouseDown( event.getPos() );
 }
 
 void NVidiaComputeParticlesApp::mouseDrag( MouseEvent event )
 {
-	mMayaCam.mouseDrag( event.getPos(), event.isLeftDown(), event.isMiddleDown(), event.isRightDown() );
+	mCamUi.mouseDrag( event.getPos(), event.isLeftDown(), event.isMiddleDown(), event.isRightDown() );
 }
 
 void NVidiaComputeParticlesApp::resetParticleSystem( float size )
 {
-	vec4 *pos = mPos->mapT( GL_WRITE_ONLY );
-	for( size_t i = 0; i < NUM_PARTICLES; ++i ) {
-		pos[i] = vec4( sfrand() * size, sfrand() * size, sfrand() * size, 1.0f );
-	}
-	mPos->unmap();
-
-	vec4 *vel = mVel->mapT( GL_WRITE_ONLY );
-	for( size_t i = 0; i < NUM_PARTICLES; ++i ) {
-		vel[i] = vec4( 0.0f, 0.0f, 0.0f, 1.0f );
-	}
+	Particle *particles = static_cast<Particle *>( mParticles[0]->map( GL_WRITE_ONLY ) );
+    {
+        //??gl::ScopedBuffer scopePos( mPos );
+        for( size_t i = 0; i < NUM_PARTICLES; ++i ) {
+            particles[i].pos = vec4( sfrand() * size, sfrand() * size, sfrand() * size, 1.0f );
+            particles[i].vel = vec4( 0.0f, 0.0f, 0.0f, 1.0f );
+        }
+    }
+	mParticles[0]->unmap();
+    mSourceIndex = 0;
+    mDestinationIndex = 1;
+    
+    /*
+	vec4 *vel = static_cast<vec4 *>( mVel->map( GL_WRITE_ONLY ) );
+    {
+        //??gl::ScopedBuffer scopePos( mVel );
+        for( size_t i = 0; i < NUM_PARTICLES; ++i ) {
+            vel[i] = vec4( 0.0f, 0.0f, 0.0f, 1.0f );
+        }
+    }
 	mVel->unmap();
+     */
 }
 
 void NVidiaComputeParticlesApp::updateParticleSystem()
@@ -306,6 +362,9 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
 	else {
 		mShaderParams.attractor.w = 0.0f;
 	}
+    
+    // Todo:  look at uniform buffer objects
+    
 	// Invoke the compute shader to integrate the particles
 	gl::ScopedGlslProg prog( mUpdateProg );
 	mUpdateProg->uniform( "attractor", mShaderParams.attractor );
@@ -318,13 +377,31 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
 
 	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
 
-	ScopedBufferBase scopedPosBuffer( mPos, 1 );
-	ScopedBufferBase scopedVelBuffer( mVel, 2 );
+	//ScopedBufferBase scopedPosBuffer( mPos, 1 );
+	//ScopedBufferBase scopedVelBuffer( mVel, 2 );
 
-	glDispatchCompute( NUM_PARTICLES / WORK_GROUP_SIZE, 1, 1 );
+	//glDispatchCompute( NUM_PARTICLES / WORK_GROUP_SIZE, 1, 1 );
 	// We need to block here on compute completion to ensure that the
 	// computation is done before we render
-	glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT );
+	//glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT );
+    
+    //gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 6, GL_UNSIGNED_INT, 0 );
+    // Bind the source data (Attributes refer to specific buffers).
+    gl::ScopedVao source( mAttributes[mSourceIndex] );
+    // Bind destination as buffer base.
+    gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 0, mParticles[mDestinationIndex] );
+    gl::beginTransformFeedback( GL_TRIANGLES );
+    
+    // Draw source into destination, performing our vertex transformations.
+    gl::drawArrays( GL_TRIANGLES, 0, NUM_PARTICLES ); // NUM_PARTICLES * 6
+    
+    gl::endTransformFeedback();
+    
+    // Swap source and destination for next loop
+    std::swap( mSourceIndex, mDestinationIndex );
+    
+    
+    
 	CI_CHECK_GL();
 }
 
@@ -336,19 +413,19 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 	tex3dFmt.setWrapT( GL_REPEAT );
 	tex3dFmt.setMagFilter( GL_LINEAR );
 	tex3dFmt.setMinFilter( GL_LINEAR );
-	tex3dFmt.setPixelDataFormat( GL_RGBA );
-	tex3dFmt.setPixelDataType( GL_FLOAT );
+	tex3dFmt.setInternalFormat( GL_RGBA );
+	tex3dFmt.setDataType( GL_FLOAT );
 	tex3dFmt.setInternalFormat( GL_RGBA8_SNORM );
 
-	int width = mNoiseSize;
-	int height = mNoiseSize;
-	int depth = mNoiseSize;
+	const int width = mNoiseSize;
+	const int height = mNoiseSize;
+	const int depth = mNoiseSize;
 
 	std::vector<float> data( width * height * depth * 4 );
 	int i = 0;
-	for( int z = 0; z < depth; z++ ) {
-		for( int y = 0; y < height; y++ ) {
-			for( int x = 0; x < width; x++ ) {
+	for( int z = 0; z < depth; ++z ) {
+		for( int y = 0; y < height; ++y ) {
+			for( int x = 0; x < width; ++x ) {
 				data[i++] = sfrand();
 				data[i++] = sfrand(); 
 				data[i++] = sfrand(); 
@@ -361,15 +438,19 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 
 	glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
 	glTexImage3D( mNoiseTex->getTarget(),
-					0,
-					mNoiseTex->getInternalFormat(),
-					mNoiseTex->getWidth(),
-					mNoiseTex->getHeight(),
-					mNoiseTex->getDepth(),
-					0.0f,
-					tex3dFmt.getPixelDataFormat(),
-					GL_FLOAT,//tex3dFmt.getPixelDataType(), //!!! Possibly copy and paste bug!!!!
-					&( data[0] ) );
+                  0,
+                  mNoiseTex->getInternalFormat(),
+                  mNoiseTex->getWidth(),
+                  mNoiseTex->getHeight(),
+                  mNoiseTex->getDepth(),
+                  0.0f,
+                  tex3dFmt.getInternalFormat(),
+                  GL_FLOAT,//tex3dFmt.getDataType(), //!!! Possibly copy and paste bug!!!!
+                 data.data() );//&( data[0] ) );
 }
 
-CINDER_APP_NATIVE( NVidiaComputeParticlesApp, RendererGl )
+//CINDER_APP_NATIVE( NVidiaComputeParticlesApp, RendererGl )
+CINDER_APP( NVidiaComputeParticlesApp, RendererGl(),
+           [&]( App::Settings *settings ) {
+               settings->setWindowSize( 1280, 720 );
+           })
