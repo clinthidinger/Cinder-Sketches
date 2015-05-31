@@ -32,16 +32,9 @@
 //
 //----------------------------------------------------------------------------------
 #version 410
-// #extension GL_ARB_compute_shader : enable
-// #extension GL_ARB_shader_storage_buffer_object : enable
-
-//#UNIFORMS
-//#define WORK_GROUP_SIZE 128
 
 uniform vec4	attractor;
-//uniform uint	numParticles;
 uniform float	numParticles;
-//uniform float	spriteSize;
 uniform float	damping;
 uniform float	noiseFreq;
 uniform float	noiseStrength;
@@ -58,16 +51,6 @@ out vec4  oQuadPosition2;
 out vec4  oQuadPosition3;
 out vec4  oQuadPosition4;
 
-//layout( std140, binding = 1 ) buffer Pos {
-//	vec4 pos[];
-//};
-
-//layout( std140, binding = 2 ) buffer Vel {
-//	vec4 vel[];
-//};
-
-//layout( local_size_x = WORK_GROUP_SIZE,  local_size_y = 1, local_size_z = 1 ) in;
-
 // noise functions
 // returns random value in [-1, 1]
 vec3 noise3f( vec3 p )
@@ -81,7 +64,8 @@ vec3 fBm3f( vec3 p, int octaves, float lacunarity, float gain )
 	float freq = 1.0;
 	float amp = 0.5;
 	vec3 sum = vec3( 0.0 );
-	for( int i=0; i < octaves; i++ ) {
+	for( int i = 0; i < octaves; i++ )
+    {
 		sum += noise3f( p * freq ) * amp;
 		freq *= lacunarity;
 		amp *= gain;
@@ -103,10 +87,8 @@ vec3 attract( vec3 p, vec3 p2 )
 // Compute shader to update particles
 void main()
 {
-    uint i = gl_VertexID;//gl_GlobalInvocationID.x;
-
-	// Thread block size may not be exact multiple of number of particles.
-	if( i >= numParticles )
+   // Thread block size may not be exact multiple of number of particles.
+	if( gl_VertexID >= numParticles )
 	{
 		return;
 	}
