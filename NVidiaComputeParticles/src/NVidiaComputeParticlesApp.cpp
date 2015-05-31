@@ -219,8 +219,8 @@ void NVidiaComputeParticlesApp::setupBuffers()
 
 	mIndicesVbo = gl::Vbo::create<uint32_t>( GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW );
     
-    for( int i = 0; i < 2; ++i )
-    {	// Describe the particle layout for OpenGL.
+    for( int i = 0; i < 2; ++i ) {
+    	// Describe the particle layout for OpenGL.
         mParticlesVao[i] = gl::Vao::create();
         gl::ScopedVao scopedVao( mParticlesVao[i] );
         
@@ -397,19 +397,8 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 	}
     
 	mNoiseTex = gl::Texture3d::create( mNoiseSize, mNoiseSize, mNoiseSize, tex3dFmt );
-	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
-
-    glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
-    glTexImage3D( mNoiseTex->getTarget(),
-                  0,
-                  mNoiseTex->getInternalFormat(),
-                  mNoiseTex->getWidth(),
-                  mNoiseTex->getHeight(),
-                  mNoiseTex->getDepth(),
-                  0.0f,
-                  GL_RGBA,
-                  tex3dFmt.getDataType(),
-                  data.data() );
+    mNoiseTex->update( data.data(), GL_RGBA, tex3dFmt.getDataType(), 0, mNoiseTex->getWidth(),
+                       mNoiseTex->getHeight(), mNoiseTex->getDepth() );
 }
 
 CINDER_APP( NVidiaComputeParticlesApp, RendererGl(),
