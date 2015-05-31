@@ -225,7 +225,7 @@ void NVidiaComputeParticlesApp::setupBuffers()
         gl::ScopedVao scopedVao( mParticlesVao[i] );
         
         // Define attributes as offsets into the bound particle buffer
-        gl::ScopedBuffer scopedVbo( mParticles[i] );
+        mParticles[i]->bind();
         gl::enableVertexAttribArray( 0 );
         gl::enableVertexAttribArray( 1 );
         gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast< const GLvoid *>( offsetof( Particle, pos ) ) );
@@ -236,8 +236,8 @@ void NVidiaComputeParticlesApp::setupBuffers()
         // TODO:  Fix me.
         mQuadPositionsVao = gl::Vao::create();
         gl::ScopedVao scopedVao( mQuadPositionsVao );
-        gl::ScopedBuffer scopedIndices( mIndicesVbo );
-        gl::ScopedBuffer scopedPositions( mQuadPositions );
+        mIndicesVbo->bind();
+        mQuadPositions->bind();
         gl::enableVertexAttribArray( 0 );
         gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
     }
@@ -280,16 +280,9 @@ void NVidiaComputeParticlesApp::draw()
 	gl::disable( GL_CULL_FACE );
 	
 	{
-        gl::ScopedBuffer scopedIndices( mIndicesVbo );
-        gl::ScopedBuffer scopedPositions( mQuadPositions );
-        gl::enableVertexAttribArray( 0 );
-        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
-
-        //gl::ScopedVao scopedVao( mQuadPositionsVao );
+        gl::ScopedVao scopedVao( mQuadPositionsVao );
         gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 6, GL_UNSIGNED_INT, 0 );
-        
-        //glDisableVertexAttribArray( 0 );
-	}
+  	}
 
 	CI_CHECK_GL();
 	gl::disableAlphaBlending();
