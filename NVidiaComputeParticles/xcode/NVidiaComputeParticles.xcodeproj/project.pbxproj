@@ -23,8 +23,6 @@
 		F4A3E46E1B177E1700134EA2 /* particle_update.vs.glsl in Resources */ = {isa = PBXBuildFile; fileRef = F4A3E46B1B177E1700134EA2 /* particle_update.vs.glsl */; };
 		F4A3E46F1B177E1700134EA2 /* render.fs.glsl in Resources */ = {isa = PBXBuildFile; fileRef = F4A3E46C1B177E1700134EA2 /* render.fs.glsl */; };
 		F4A3E4701B177E1700134EA2 /* render.vs.glsl in Resources */ = {isa = PBXBuildFile; fileRef = F4A3E46D1B177E1700134EA2 /* render.vs.glsl */; };
-		F4A3E4731B17FC3B00134EA2 /* TransformFeedbackApp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4A3E4711B17FC3B00134EA2 /* TransformFeedbackApp.cpp */; };
-		F4A3E4751B18CCAB00134EA2 /* particle_test.vs.glsl in Resources */ = {isa = PBXBuildFile; fileRef = F4A3E4741B18CCAB00134EA2 /* particle_test.vs.glsl */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,8 +48,6 @@
 		F4A3E46B1B177E1700134EA2 /* particle_update.vs.glsl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = particle_update.vs.glsl; path = ../assets/particle_update.vs.glsl; sourceTree = "<group>"; };
 		F4A3E46C1B177E1700134EA2 /* render.fs.glsl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = render.fs.glsl; path = ../assets/render.fs.glsl; sourceTree = "<group>"; };
 		F4A3E46D1B177E1700134EA2 /* render.vs.glsl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = render.vs.glsl; path = ../assets/render.vs.glsl; sourceTree = "<group>"; };
-		F4A3E4711B17FC3B00134EA2 /* TransformFeedbackApp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TransformFeedbackApp.cpp; path = ../src/TransformFeedbackApp.cpp; sourceTree = "<group>"; };
-		F4A3E4741B18CCAB00134EA2 /* particle_test.vs.glsl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = particle_test.vs.glsl; path = ../assets/particle_test.vs.glsl; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,7 +83,6 @@
 			isa = PBXGroup;
 			children = (
 				B7A4784E20ED494F9B21363A /* NVidiaComputeParticlesApp.cpp */,
-				F4A3E4711B17FC3B00134EA2 /* TransformFeedbackApp.cpp */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -174,7 +169,6 @@
 				F4A3E46B1B177E1700134EA2 /* particle_update.vs.glsl */,
 				F4A3E46C1B177E1700134EA2 /* render.fs.glsl */,
 				F4A3E46D1B177E1700134EA2 /* render.vs.glsl */,
-				F4A3E4741B18CCAB00134EA2 /* particle_test.vs.glsl */,
 			);
 			name = Assets;
 			sourceTree = "<group>";
@@ -233,7 +227,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F4A3E46E1B177E1700134EA2 /* particle_update.vs.glsl in Resources */,
-				F4A3E4751B18CCAB00134EA2 /* particle_test.vs.glsl in Resources */,
 				F4A3E4701B177E1700134EA2 /* render.vs.glsl in Resources */,
 				F4A3E46F1B177E1700134EA2 /* render.fs.glsl in Resources */,
 				C3041C1140C24C10A4F5000E /* CinderApp.icns in Resources */,
@@ -248,7 +241,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BCBC8C5000524042AD7AE57E /* NVidiaComputeParticlesApp.cpp in Sources */,
-				F4A3E4731B17FC3B00134EA2 /* TransformFeedbackApp.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -33,12 +33,16 @@
 //----------------------------------------------------------------------------------
 #version 410
 
-uniform vec4	attractor;
-uniform float	numParticles;
-uniform float	damping;
-uniform float	noiseFreq;
-uniform float	noiseStrength;
-uniform float	invNoiseSize;
+layout (std140) uniform ParticleParams
+{
+    uniform vec4	attractor;
+    uniform float	numParticles;
+    uniform float	damping;
+    uniform float	noiseFreq;
+    uniform float	noiseStrength;
+    uniform float	invNoiseSize;
+};
+
 uniform sampler3D	noiseTex3D;
 
 in vec4   iPosition;

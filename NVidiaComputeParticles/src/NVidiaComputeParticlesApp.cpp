@@ -53,27 +53,27 @@ using namespace ci::app;
 
 inline float sfrand()
 {
-	//return ( ( randFloat() * 2.0f ) - 1.0f );
 	return randPosNegFloat( -1.0f, 1.0f );
 }
 
-struct ShaderParams
+struct ParticleParams
 {
+    ParticleParams( float noiseSize )
+        : attractor( 0.0f, 0.0f, 0.0f, 0.0f ),
+          damping( 0.95f ),
+          noiseFreq( 10.0f ),
+          noiseStrength( 0.001f ),
+          invNoiseSize( 1.0f / noiseSize )
+    {
+    }
+    
 	vec4 attractor;
-	uint32_t numParticles;
-	float spriteSize;
+	float numParticles;
+	//float spriteSize;
 	float damping;
 	float noiseFreq;
 	float noiseStrength;
-
-	ShaderParams() :
-		spriteSize( 0.015f ),
-		attractor( 0.0f, 0.0f, 0.0f, 0.0f ),
-		damping( 0.95f ),
-		noiseFreq( 10.0f ),
-		noiseStrength( 0.001f )
-	{
-	}
+    float invNoiseSize;
 };
 
 struct Particle
@@ -88,7 +88,9 @@ struct Particle
     vec4 vel;
 };
 
-class NVidiaComputeParticlesApp : public App {
+
+class NVidiaComputeParticlesApp : public App
+{
 public:
     NVidiaComputeParticlesApp();
     
@@ -111,13 +113,12 @@ public:
 
 	gl::GlslProgRef mRenderProg;
 	gl::GlslProgRef mUpdateProg;
-
-    // Descriptions of particle data layout.
     gl::VaoRef mParticlesVao[2];
     gl::VaoRef mQuadPositionsVao;
     gl::VboRef mParticles[2];
     gl::VboRef mQuadPositions;
     gl::VboRef mIndicesVbo;
+    gl::UboRef mParticleUpdateUbo;
     
     std::uint32_t	mSourceIndex		= 0;
     std::uint32_t	mDestinationIndex	= 1;
@@ -126,8 +127,9 @@ public:
 	params::InterfaceGlRef mParams;
     CameraPersp	mCam;
 	CameraUi mCamUi;
-	ShaderParams mShaderParams;
 	int mNoiseSize;
+    ParticleParams mParticleParams;
+    float mSpriteSize;
 	bool mEnableAttractor;
 	bool mAnimate;
 	bool mReset;
@@ -135,15 +137,18 @@ public:
 	float mPrevElapsedSeconds;
 };
 
+//------------------------------------------------------------------------------
 NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
     : mCam( getWindowWidth(), getWindowHeight(), 45.0f, 0.1f, 10.0f ),
       mCamUi( &mCam ),
+      mNoiseSize( 16 ),
+      mParticleParams( mNoiseSize ),
+      mSpriteSize( 0.015f ),
       mEnableAttractor( false ),
       mAnimate( true ),
       mReset( false ),
       mTime( 0.0f ),
-      mPrevElapsedSeconds( 0.0f ),
-      mNoiseSize( 16 )
+      mPrevElapsedSeconds( 0.0f )
 {
     setupNoiseTexture3D();
 	setupShaders();
@@ -159,26 +164,33 @@ NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
 	mParams->addParam( "Animate", &mAnimate );
 	mParams->addParam( "Enable attractor", &mEnableAttractor );
 	mParams->addSeparator();
-	mParams->addParam( "Sprite size", &( mShaderParams.spriteSize ) );// Range: 0.0f, 0.04f );
-	mParams->addParam( "Noise strength", &( mShaderParams.noiseStrength ) );// Range: 0.0f, 0.01f );
-	mParams->addParam( "Noise frequency", &( mShaderParams.noiseFreq ) );// Range: 0.0f, 20.0f );
+	mParams->addParam( "Sprite size", &( mSpriteSize ) );// Range: 0.0f, 0.04f );
+	mParams->addParam( "Noise strength", &( mParticleParams.noiseStrength ) );// Range: 0.0f, 0.01f );
+	mParams->addParam( "Noise frequency", &( mParticleParams.noiseFreq ) );// Range: 0.0f, 20.0f );
 	mParams->addSeparator();
 	mParams->addParam( "Reset", &mReset );
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::setupShaders()
 {
-    try {
-		mRenderProg = gl::GlslProg::create( gl::GlslProg::Format().vertex( loadAsset( "render.vs.glsl" ) )
-			.fragment( loadAsset( "render.fs.glsl" ) ) );
+    try
+    {
+		mRenderProg = gl::GlslProg::create( gl::GlslProg::Format()
+                                            .vertex( loadAsset( "render.vs.glsl" ) )
+			                                .fragment( loadAsset( "render.fs.glsl" ) ) );
 	}
-	catch( gl::GlslProgCompileExc e ) {
+	catch( gl::GlslProgCompileExc e )
+    {
 		ci::app::console() << e.what() << std::endl;
-        quit(); //???
+        quit();
 	}
 
-   try {
-        
+    try
+    {
+        //! @note Here we hook up two output buffers using gl_NextBuffer.
+        //        The first is the one that will be ping ponged for the particle
+        //        update.  The second is used to output data for the render shaders.
         mUpdateProg = gl::GlslProg::create( gl::GlslProg::Format()
                                            .vertex( loadAsset( "particle_update.vs.glsl" ) )
                                            .feedbackFormat( GL_INTERLEAVED_ATTRIBS )
@@ -189,15 +201,22 @@ void NVidiaComputeParticlesApp::setupShaders()
                                            .attribLocation( "iVelocity", 1 )
                                            );
 	}
-	catch( gl::GlslProgCompileExc e ) {
+	catch( gl::GlslProgCompileExc e )
+    {
 		ci::app::console() << e.what() << std::endl;
-		quit(); //???
+		quit();
 	}
 
-    mUpdateProg->uniform( "invNoiseSize", 1.0f / mNoiseSize );
+    // Particle update ubo.
+    mParticleUpdateUbo = gl::Ubo::create( sizeof( mParticleParams ), &mParticleParams, GL_DYNAMIC_DRAW );
+    mParticleUpdateUbo->bindBufferBase( 0 );
+    mUpdateProg->uniformBlock( "ParticleParams", 0 );
+    
+    //!!!mUpdateProg->uniform( "invNoiseSize", 1.0f / mNoiseSize );
 	mUpdateProg->uniform( "noiseTex3D", 0 );
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::setupBuffers()
 {
     std::vector<Particle> particles( NUM_PARTICLES, Particle() );
@@ -207,7 +226,8 @@ void NVidiaComputeParticlesApp::setupBuffers()
 
     // The index buffer is a classic "two-tri quad" array.
 	std::vector<uint32_t> indices( NUM_PARTICLES * 6 );
-	for( size_t i = 0, j = 0; i < NUM_PARTICLES; ++i ) {
+	for( size_t i = 0, j = 0; i < NUM_PARTICLES; ++i )
+    {
 		size_t index = i << 2;
         indices[j++] = index;
 		indices[j++] = index + 1;
@@ -219,7 +239,9 @@ void NVidiaComputeParticlesApp::setupBuffers()
 
 	mIndicesVbo = gl::Vbo::create<uint32_t>( GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW );
     
-    for( int i = 0; i < 2; ++i ) {
+    // Set up particle vao's.
+    for( int i = 0; i < 2; ++i )
+    {
     	// Describe the particle layout for OpenGL.
         mParticlesVao[i] = gl::Vao::create();
         gl::ScopedVao scopedVao( mParticlesVao[i] );
@@ -228,40 +250,48 @@ void NVidiaComputeParticlesApp::setupBuffers()
         mParticles[i]->bind();
         gl::enableVertexAttribArray( 0 );
         gl::enableVertexAttribArray( 1 );
-        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast< const GLvoid *>( offsetof( Particle, pos ) ) );
-        gl::vertexAttribPointer( 1, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast<const GLvoid *>(offsetof( Particle, vel ) ) );
+        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ),
+                                 reinterpret_cast< const GLvoid *>( offsetof( Particle, pos ) ) );
+        gl::vertexAttribPointer( 1, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ),
+                                reinterpret_cast<const GLvoid *>( offsetof( Particle, vel ) ) );
     }
     
+    // Set up quad buffer vao.
     {
-        // TODO:  Fix me.
         mQuadPositionsVao = gl::Vao::create();
         gl::ScopedVao scopedVao( mQuadPositionsVao );
         mIndicesVbo->bind();
         mQuadPositions->bind();
         gl::enableVertexAttribArray( 0 );
-        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
+        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ),
+                                 reinterpret_cast< const GLvoid *>( 0 ) );
     }
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::resize()
 {
 	float vfov = mCam.getFov();
-	mCam.setPerspective( vfov, getWindowAspectRatio(), 0.1f, 10.0f ); //! fix hard code
+    mCam.setPerspective( vfov, getWindowAspectRatio(), mCam.getNearClip(), mCam.getFarClip() );
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::update()
 {
-	if( mAnimate ) {
+	if( mAnimate )
+    {
 		updateParticleSystem();
 	}
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::draw()
 {
 	gl::clear( ColorA( 0.25f, 0.25f, 0.25f, 1.0f ) );
 	gl::clear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
-	if( mReset ) {
+	if( mReset )
+    {
 		mReset = false;
 		resetParticleSystem( 0.5f );
 	}
@@ -270,7 +300,7 @@ void NVidiaComputeParticlesApp::draw()
 
 	// draw particles
 	gl::ScopedGlslProg scopedRenderProg( mRenderProg );
-	mRenderProg->uniform( "spriteSize", mShaderParams.spriteSize );
+	mRenderProg->uniform( "spriteSize", mSpriteSize );
 
 	gl::context()->setDefaultShaderVars();
 
@@ -290,21 +320,25 @@ void NVidiaComputeParticlesApp::draw()
 	mParams->draw();
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::mouseDown( MouseEvent event )
 {
 	mCamUi.mouseDown( event.getPos() );
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::mouseDrag( MouseEvent event )
 {
 	mCamUi.mouseDrag( event.getPos(), event.isLeftDown(), event.isMiddleDown(), event.isRightDown() );
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::resetParticleSystem( float size )
 {
 	Particle *particles = static_cast<Particle *>( mParticles[0]->map( GL_WRITE_ONLY ) );
     {
-        for( size_t i = 0; i < NUM_PARTICLES; ++i ) {
+        for( size_t i = 0; i < NUM_PARTICLES; ++i )
+        {
             particles[i].pos = vec4( sfrand() * size, sfrand() * size, sfrand() * size, 1.0f );
             particles[i].vel = vec4( 0.0f, 0.0f, 0.0f, 1.0f );
         }
@@ -314,35 +348,41 @@ void NVidiaComputeParticlesApp::resetParticleSystem( float size )
     mDestinationIndex = 1;
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::updateParticleSystem()
 {
-	mShaderParams.numParticles = NUM_PARTICLES;
-	if( mEnableAttractor ) {
+	mParticleParams.numParticles = NUM_PARTICLES;
+	if( mEnableAttractor )
+    {
 		// move attractor
 		const float speed = 0.2f;
-		mShaderParams.attractor.x = math<float>::sin( mTime * speed );
-		mShaderParams.attractor.y = math<float>::sin( mTime * speed * 1.3f );
-		mShaderParams.attractor.z = math<float>::cos( mTime * speed );
+		mParticleParams.attractor.x = math<float>::sin( mTime * speed );
+		mParticleParams.attractor.y = math<float>::sin( mTime * speed * 1.3f );
+		mParticleParams.attractor.z = math<float>::cos( mTime * speed );
 		float elapsedSeconds = static_cast<float>( ci::app::getElapsedSeconds() );
 		mTime += elapsedSeconds - mPrevElapsedSeconds;
 		mPrevElapsedSeconds = elapsedSeconds;
 
-		mShaderParams.attractor.w = 0.0002f;
+		mParticleParams.attractor.w = 0.0002f;
 	}
-	else {
-		mShaderParams.attractor.w = 0.0f;
+	else
+    {
+		mParticleParams.attractor.w = 0.0f;
 	}
     
     //!!! Todo:  look at uniform buffer objects
     
-	// Invoke the compute shader to integrate the particles
+	// Invoke the compute shader to integrate the particles.
 	gl::ScopedGlslProg prog( mUpdateProg );
-    gl::ScopedState rasterizer( GL_RASTERIZER_DISCARD, true );	// turn off fragment stage
-	mUpdateProg->uniform( "attractor", mShaderParams.attractor );
-	mUpdateProg->uniform( "numParticles", static_cast<float>( mShaderParams.numParticles ) );
-	mUpdateProg->uniform( "damping", mShaderParams.damping );
-	mUpdateProg->uniform( "noiseFreq", mShaderParams.noiseFreq );
-	mUpdateProg->uniform( "noiseStrength", mShaderParams.noiseStrength );
+    // Turn off fragment stage.
+    gl::ScopedState rasterizer( GL_RASTERIZER_DISCARD, true );
+    
+    mParticleUpdateUbo->bufferSubData( 0, sizeof( mParticleParams ), &mParticleParams );
+	//mUpdateProg->uniform( "attractor", mShaderParams.attractor );
+	//mUpdateProg->uniform( "numParticles", static_cast<float>( mShaderParams.numParticles ) );
+	//mUpdateProg->uniform( "damping", mShaderParams.damping );
+	//mUpdateProg->uniform( "noiseFreq", mShaderParams.noiseFreq );
+	//mUpdateProg->uniform( "noiseStrength", mShaderParams.noiseStrength );
 
 	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
 
@@ -361,6 +401,7 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
     std::swap( mSourceIndex, mDestinationIndex );
 }
 
+//------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 {
 	gl::Texture3d::Format tex3dFmt;
@@ -378,9 +419,12 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 
 	std::vector<float> data( width * height * depth * 4 );
 	int i = 0;
-	for( int z = 0; z < depth; ++z ) {
-		for( int y = 0; y < height; ++y ) {
-			for( int x = 0; x < width; ++x ) {
+	for( int z = 0; z < depth; ++z )
+    {
+		for( int y = 0; y < height; ++y )
+        {
+			for( int x = 0; x < width; ++x )
+            {
 				data[i++] = sfrand();
 				data[i++] = sfrand(); 
 				data[i++] = sfrand(); 
@@ -395,7 +439,8 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 }
 
 CINDER_APP( NVidiaComputeParticlesApp, RendererGl(),
-           [&]( App::Settings *settings ) {
+           [&]( App::Settings *settings )
+           {
                settings->setWindowSize( 1280, 720 );
            })
 
