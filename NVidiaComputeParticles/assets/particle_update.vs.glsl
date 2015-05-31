@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------------------
 // File:        ComputeParticles/assets/shaders/particlesCS.glsl
-// SDK Version: v1.2 
+// SDK Version: v1.2
 // Email:       gameworks@nvidia.com
 // Site:        http://developer.nvidia.com/
 //
@@ -59,58 +59,58 @@ out vec4  oQuadPosition4;
 // returns random value in [-1, 1]
 vec3 noise3f( vec3 p )
 {
-	return texture( noiseTex3D, p * invNoiseSize ).xyz;
+    return texture( noiseTex3D, p * invNoiseSize ).xyz;
 }
 
 // Fractal sum
 vec3 fBm3f( vec3 p, int octaves, float lacunarity, float gain )
 {
-	float freq = 1.0;
-	float amp = 0.5;
-	vec3 sum = vec3( 0.0 );
-	for( int i = 0; i < octaves; i++ )
+    float freq = 1.0;
+    float amp = 0.5;
+    vec3 sum = vec3( 0.0 );
+    for( int i = 0; i < octaves; i++ )
     {
-		sum += noise3f( p * freq ) * amp;
-		freq *= lacunarity;
-		amp *= gain;
-	}
-	return sum;
+        sum += noise3f( p * freq ) * amp;
+        freq *= lacunarity;
+        amp *= gain;
+    }
+    return sum;
 }
 
 vec3 attract( vec3 p, vec3 p2 )
 {
-	const float softeningSquared = 0.01;
-	vec3 v = p2 - p;
-	float r2 = dot( v, v );
-	r2 += softeningSquared;
-	float invDist = 1.0f / sqrt( r2 );
-	float invDistCubed = invDist * invDist * invDist;
-	return v * invDistCubed;
+    const float softeningSquared = 0.01;
+    vec3 v = p2 - p;
+    float r2 = dot( v, v );
+    r2 += softeningSquared;
+    float invDist = 1.0f / sqrt( r2 );
+    float invDistCubed = invDist * invDist * invDist;
+    return v * invDistCubed;
 }
 
 // Compute shader to update particles
 void main()
 {
-   // Thread block size may not be exact multiple of number of particles.
-	if( gl_VertexID >= numParticles )
-	{
-		return;
-	}
-
-	// Read particle position and velocity from buffers.
-	vec3 p = iPosition.xyz;
-	vec3 v = iVelocity.xyz;
-
-	v += fBm3f( p * noiseFreq, 4, 2.0, 0.5 ) * noiseStrength;
-	v += attract( p, attractor.xyz ) * attractor.w;
-
-	// Integrate
-	p += v;
-	v *= damping;
-
-	// Write new values
-	oPosition = vec4( p, 1.0 );
-	oVelocity = vec4( v, 0.0 );
+    // Thread block size may not be exact multiple of number of particles.
+    if( gl_VertexID >= numParticles )
+    {
+        return;
+    }
+    
+    // Read particle position and velocity from buffers.
+    vec3 p = iPosition.xyz;
+    vec3 v = iVelocity.xyz;
+    
+    v += fBm3f( p * noiseFreq, 4, 2.0, 0.5 ) * noiseStrength;
+    v += attract( p, attractor.xyz ) * attractor.w;
+    
+    // Integrate
+    p += v;
+    v *= damping;
+    
+    // Write new values
+    oPosition = vec4( p, 1.0 );
+    oVelocity = vec4( v, 0.0 );
     oQuadPosition1 = oPosition;
     oQuadPosition2 = oPosition;
     oQuadPosition3 = oPosition;

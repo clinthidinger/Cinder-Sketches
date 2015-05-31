@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------------------
 // File:        ComputeParticles/assets/shaders/renderVS.glsl
-// SDK Version: v1.2 
+// SDK Version: v1.2
 // Email:       gameworks@nvidia.com
 // Site:        http://developer.nvidia.com/
 //
@@ -40,26 +40,26 @@ uniform float spriteSize;
 in vec4 iPos;
 
 out gl_PerVertex {
-	vec4 gl_Position;
+    vec4 gl_Position;
 };
 
 out block {
-	vec4 color;
-	vec2 texCoord;
+    vec4 color;
+    vec2 texCoord;
 } Out;
 
 void main()
 {
-	vec4 particlePos = iPos;
-
-	Out.color = vec4( 0.5, 0.2, 0.1, 1.0 );
-
-	//map vertex ID to quad vertex
-	vec2 quadPos = vec2( ( ( gl_VertexID - 1 ) & 2 ) >> 1, ( gl_VertexID & 2 ) >> 1 );
-
-	vec4 particlePosEye = ciModelView * particlePos;
-	vec4 vertexPosEye = particlePosEye + vec4( ( quadPos * 2.0 - 1.0 ) * spriteSize, 0, 0 );
-
-	Out.texCoord = quadPos;
-	gl_Position = ciProjectionMatrix * vertexPosEye;
+    vec4 particlePos = iPos;
+    
+    Out.color = vec4( 0.5, 0.2, 0.1, 1.0 );
+    
+    //map vertex ID to quad vertex
+    vec2 quadPos = vec2( ( ( gl_VertexID - 1 ) & 2 ) >> 1, ( gl_VertexID & 2 ) >> 1 );
+    
+    vec4 particlePosEye = ciModelView * particlePos;
+    vec4 vertexPosEye = particlePosEye + vec4( ( quadPos * 2.0 - 1.0 ) * spriteSize, 0, 0 );
+    
+    Out.texCoord = quadPos;
+    gl_Position = ciProjectionMatrix * vertexPosEye;
 }

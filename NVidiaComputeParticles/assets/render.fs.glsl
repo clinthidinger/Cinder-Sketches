@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------------------
 // File:        ComputeParticles/assets/shaders/renderFS.glsl
-// SDK Version: v1.2 
+// SDK Version: v1.2
 // Email:       gameworks@nvidia.com
 // Site:        http://developer.nvidia.com/
 //
@@ -34,21 +34,21 @@
 #version 410
 
 in block {
-	vec4 color;
-	vec2 texCoord;
+    vec4 color;
+    vec2 texCoord;
 } In;
 
 layout( location = 0 ) out vec4 fragColor;
 
 void main()
 {
-	// Quick fall-off computation
-	float r = length( In.texCoord * 2.0 - 1.0 ) * 3.0;
-	float i = exp( -r * r );
-	if( i < 0.01 )
-	{
-		discard;
-	}
-
+    // Quick fall-off computation
+    float r = length( In.texCoord * 2.0 - 1.0 ) * 3.0;
+    float i = exp( -r * r );
+    if( i < 0.01 )
+    {
+        discard;
+    }
+    
     fragColor = vec4( In.color.rgb, i );
 }
