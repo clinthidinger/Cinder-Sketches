@@ -84,8 +84,8 @@ struct Particle
     {
     }
     
-    vec4	pos;
-    vec4	vel;
+    vec4 pos;
+    vec4 vel;
 };
 
 class NVidiaComputeParticlesApp : public App {
@@ -113,8 +113,8 @@ public:
 	gl::GlslProgRef mUpdateProg;
 
     // Descriptions of particle data layout.
-    gl::VaoRef		mAttributes[2];
-    gl::VaoRef      mQuadPositionsVao;
+    gl::VaoRef mParticlesVao[2];
+    gl::VaoRef mQuadPositionsVao;
     gl::VboRef mParticles[2];
     gl::VboRef mQuadPositions;
     gl::VboRef mIndicesVbo;
@@ -205,17 +205,11 @@ void NVidiaComputeParticlesApp::setupBuffers()
     mParticles[1] = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( Particle ), nullptr, GL_STATIC_DRAW );
     mQuadPositions = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( vec4 ) * 4, nullptr, GL_STATIC_DRAW );
 
+    // The index buffer is a classic "two-tri quad" array.
 	std::vector<uint32_t> indices( NUM_PARTICLES * 6 );
-	// the index buffer is a classic "two-tri quad" array.
-	// This may seem odd, given that the compute buffer contains a single
-	// vector for each particle.  However, the shader takes care of this
-	// by indexing the compute shader buffer with a /4.  The value mod 4
-	// is used to compute the offset from the vertex site, and each of the
-	// four indices in a given quad references the same center point
-	//uint32_t *indices = mIndices->mapT( GL_WRITE_ONLY );
 	for( size_t i = 0, j = 0; i < NUM_PARTICLES; ++i ) {
 		size_t index = i << 2;
-		indices[j++] = index;
+        indices[j++] = index;
 		indices[j++] = index + 1;
 		indices[j++] = index + 2;
 		indices[j++] = index;
@@ -227,15 +221,25 @@ void NVidiaComputeParticlesApp::setupBuffers()
     
     for( int i = 0; i < 2; ++i )
     {	// Describe the particle layout for OpenGL.
-        mAttributes[i] = gl::Vao::create();
-        gl::ScopedVao vao( mAttributes[i] );
+        mParticlesVao[i] = gl::Vao::create();
+        gl::ScopedVao scopedVao( mParticlesVao[i] );
         
         // Define attributes as offsets into the bound particle buffer
-        gl::ScopedBuffer buffer( mParticles[i] );
+        gl::ScopedBuffer scopedVbo( mParticles[i] );
         gl::enableVertexAttribArray( 0 );
         gl::enableVertexAttribArray( 1 );
         gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast< const GLvoid *>( offsetof( Particle, pos ) ) );
         gl::vertexAttribPointer( 1, 4, GL_FLOAT, GL_FALSE, sizeof( Particle ), reinterpret_cast<const GLvoid *>(offsetof( Particle, vel ) ) );
+    }
+    
+    {
+        // TODO:  Fix me.
+        mQuadPositionsVao = gl::Vao::create();
+        gl::ScopedVao scopedVao( mQuadPositionsVao );
+        gl::ScopedBuffer scopedIndices( mIndicesVbo );
+        gl::ScopedBuffer scopedPositions( mQuadPositions );
+        gl::enableVertexAttribArray( 0 );
+        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
     }
 }
 
@@ -254,7 +258,6 @@ void NVidiaComputeParticlesApp::update()
 
 void NVidiaComputeParticlesApp::draw()
 {
-	CI_CHECK_GL();
 	gl::clear( ColorA( 0.25f, 0.25f, 0.25f, 1.0f ) );
 	gl::clear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
@@ -275,18 +278,17 @@ void NVidiaComputeParticlesApp::draw()
 
 	gl::disable( GL_DEPTH_TEST );
 	gl::disable( GL_CULL_FACE );
-
 	
 	{
-        gl::ScopedBuffer scopedIndicex( mIndicesVbo );
+        gl::ScopedBuffer scopedIndices( mIndicesVbo );
         gl::ScopedBuffer scopedPositions( mQuadPositions );
+        gl::enableVertexAttribArray( 0 );
+        gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
 
-        glEnableVertexAttribArray( 0 );
-        glVertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
-
+        //gl::ScopedVao scopedVao( mQuadPositionsVao );
         gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 6, GL_UNSIGNED_INT, 0 );
         
-        glDisableVertexAttribArray( 0 );
+        //glDisableVertexAttribArray( 0 );
 	}
 
 	CI_CHECK_GL();
@@ -309,7 +311,6 @@ void NVidiaComputeParticlesApp::resetParticleSystem( float size )
 {
 	Particle *particles = static_cast<Particle *>( mParticles[0]->map( GL_WRITE_ONLY ) );
     {
-        //??gl::ScopedBuffer scopePos( mPos );
         for( size_t i = 0; i < NUM_PARTICLES; ++i ) {
             particles[i].pos = vec4( sfrand() * size, sfrand() * size, sfrand() * size, 1.0f );
             particles[i].vel = vec4( 0.0f, 0.0f, 0.0f, 1.0f );
@@ -339,21 +340,20 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
 		mShaderParams.attractor.w = 0.0f;
 	}
     
-    // Todo:  look at uniform buffer objects
+    //!!! Todo:  look at uniform buffer objects
     
 	// Invoke the compute shader to integrate the particles
 	gl::ScopedGlslProg prog( mUpdateProg );
     gl::ScopedState rasterizer( GL_RASTERIZER_DISCARD, true );	// turn off fragment stage
 	mUpdateProg->uniform( "attractor", mShaderParams.attractor );
-	//mUpdateProg->uniform( "numParticles", static_cast<int>( mShaderParams.numParticles ) ); //fix this???
-	mUpdateProg->uniform( "numParticles", static_cast<float>( mShaderParams.numParticles ) ); //fix this???
+	mUpdateProg->uniform( "numParticles", static_cast<float>( mShaderParams.numParticles ) );
 	mUpdateProg->uniform( "damping", mShaderParams.damping );
 	mUpdateProg->uniform( "noiseFreq", mShaderParams.noiseFreq );
 	mUpdateProg->uniform( "noiseStrength", mShaderParams.noiseStrength );
 
 	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
 
-    gl::ScopedVao source( mAttributes[mSourceIndex] );
+    gl::ScopedVao scopedSourceVao( mParticlesVao[mSourceIndex] );
     // Bind destination as buffer base.
     gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 0, mParticles[mDestinationIndex] );
     gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 1, mQuadPositions );
@@ -362,7 +362,6 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
     // Draw source into destination, performing our vertex transformations.
     gl::drawArrays( GL_POINTS, 0, NUM_PARTICLES );
     
-    CI_CHECK_GL();
     gl::endTransformFeedback();
     
     // Swap source and destination for next loop
