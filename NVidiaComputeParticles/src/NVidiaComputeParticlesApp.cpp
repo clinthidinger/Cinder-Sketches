@@ -1,4 +1,5 @@
 //----------------------------------------------------------------------------------
+// Url:         https://github.com/NVIDIAGameWorks/OpenGLSamples/tree/master/samples/es3aep-kepler/ComputeParticles
 // File:        ComputeParticles/ParticleSystem.cpp
 // SDK Version: v1.2
 // Email:       gameworks@nvidia.com
@@ -134,16 +135,16 @@ public:
 
 //------------------------------------------------------------------------------
 NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
-: mCam( getWindowWidth(), getWindowHeight(), 45.0f, 0.1f, 10.0f ),
-mCamUi( &mCam ),
-mNoiseSize( 16 ),
-mParticleParams( mNoiseSize ),
-mSpriteSize( 0.015f ),
-mEnableAttractor( false ),
-mAnimate( true ),
-mReset( false ),
-mTime( 0.0f ),
-mPrevElapsedSeconds( 0.0f )
+    : mCam( getWindowWidth(), getWindowHeight(), 45.0f, 0.1f, 10.0f ),
+      mCamUi( &mCam ),
+      mNoiseSize( 16 ),
+      mParticleParams( mNoiseSize ),
+      mSpriteSize( 0.015f ),
+      mEnableAttractor( false ),
+      mAnimate( true ),
+      mReset( false ),
+      mTime( 0.0f ),
+      mPrevElapsedSeconds( 0.0f )
 {
     setupNoiseTexture3D();
     setupShaders();
@@ -190,8 +191,8 @@ void NVidiaComputeParticlesApp::setupShaders()
                                            .vertex( loadAsset( "particle_update.vs.glsl" ) )
                                            .feedbackFormat( GL_INTERLEAVED_ATTRIBS )
                                            .feedbackVaryings( { "oPosition", "oVelocity", "gl_NextBuffer",
-            "oQuadPosition1", "oQuadPosition2",
-            "oQuadPosition3", "oQuadPosition4" } )
+                                                                "oQuadPosition1", "oQuadPosition2",
+                                                                "oQuadPosition3", "oQuadPosition4" } )
                                            .attribLocation( "iPosition", 0 )
                                            .attribLocation( "iVelocity", 1 )
                                            );
