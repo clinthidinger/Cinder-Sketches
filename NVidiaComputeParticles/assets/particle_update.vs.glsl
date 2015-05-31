@@ -31,32 +31,42 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //----------------------------------------------------------------------------------
-#version 430
-#extension GL_ARB_compute_shader : enable
-#extension GL_ARB_shader_storage_buffer_object : enable
+#version 410
+// #extension GL_ARB_compute_shader : enable
+// #extension GL_ARB_shader_storage_buffer_object : enable
 
 //#UNIFORMS
-#define WORK_GROUP_SIZE 128
+//#define WORK_GROUP_SIZE 128
 
 uniform vec4	attractor;
 //uniform uint	numParticles;
 uniform float	numParticles;
-uniform float	spriteSize;
+//uniform float	spriteSize;
 uniform float	damping;
 uniform float	noiseFreq;
 uniform float	noiseStrength;
 uniform float	invNoiseSize;
 uniform sampler3D	noiseTex3D;
 
-layout( std140, binding = 1 ) buffer Pos {
-	vec4 pos[];
-};
+in vec4   iPosition;
+in vec4   iVelocity;
 
-layout( std140, binding = 2 ) buffer Vel {
-	vec4 vel[];
-};
+out vec4  oPosition;
+out vec4  oVelocity;
+out vec4  oQuadPosition1;
+out vec4  oQuadPosition2;
+out vec4  oQuadPosition3;
+out vec4  oQuadPosition4;
 
-layout( local_size_x = WORK_GROUP_SIZE,  local_size_y = 1, local_size_z = 1 ) in;
+//layout( std140, binding = 1 ) buffer Pos {
+//	vec4 pos[];
+//};
+
+//layout( std140, binding = 2 ) buffer Vel {
+//	vec4 vel[];
+//};
+
+//layout( local_size_x = WORK_GROUP_SIZE,  local_size_y = 1, local_size_z = 1 ) in;
 
 // noise functions
 // returns random value in [-1, 1]
@@ -93,7 +103,7 @@ vec3 attract( vec3 p, vec3 p2 )
 // Compute shader to update particles
 void main()
 {
-	uint i = gl_GlobalInvocationID.x;
+    uint i = gl_VertexID;//gl_GlobalInvocationID.x;
 
 	// Thread block size may not be exact multiple of number of particles.
 	if( i >= numParticles )
@@ -102,8 +112,8 @@ void main()
 	}
 
 	// Read particle position and velocity from buffers.
-	vec3 p = pos[i].xyz;
-	vec3 v = vel[i].xyz;
+	vec3 p = iPosition.xyz;
+	vec3 v = iVelocity.xyz;
 
 	v += fBm3f( p * noiseFreq, 4, 2.0, 0.5 ) * noiseStrength;
 	v += attract( p, attractor.xyz ) * attractor.w;
@@ -113,6 +123,11 @@ void main()
 	v *= damping;
 
 	// Write new values
-	pos[i] = vec4( p, 1.0 );
-	vel[i] = vec4( v, 0.0 );
+	oPosition = vec4( p, 1.0 );
+	oVelocity = vec4( v, 0.0 );
+    oQuadPosition1 = oPosition;
+    oQuadPosition2 = oPosition;
+    oQuadPosition3 = oPosition;
+    oQuadPosition4 = oPosition;
 }
+

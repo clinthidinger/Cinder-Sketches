@@ -32,6 +32,7 @@
 //
 //----------------------------------------------------------------------------------
 
+#if 1
 #include "cinder/app/App.h"
 #include "cinder/app/RendererGl.h"
 #include "cinder/gl/Shader.h"
@@ -112,7 +113,7 @@ public:
 	void updateParticleSystem();
 	void setupNoiseTexture3D();
 
-	enum { WORK_GROUP_SIZE = 128, NUM_PARTICLES = 1 << 18 };
+    enum { WORK_GROUP_SIZE = 128, NUM_PARTICLES = 1 << 18 };
 
 	//gl::VboRef mVBO;
 	//gl::VboMeshRef teapot;
@@ -123,12 +124,14 @@ public:
 	//SsboT<vec4>::Ref mVel;
     // Descriptions of particle data layout.
     gl::VaoRef		mAttributes[2];
+    gl::VaoRef      mQuadPositionsVao;
     // Buffers holding raw particle data on GPU.
     //gl::VboRef		mParticleBuffer[2];
     
     std::uint32_t	mSourceIndex		= 0;
     std::uint32_t	mDestinationIndex	= 1;
     gl::VboRef mParticles[2];
+    gl::VboRef mQuadPositions;
     //gl::VboRef mVel;
 	gl::VboRef mIndicesVbo;
 
@@ -156,17 +159,20 @@ NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
       mNoiseSize( 16 )
 {
     //ensureAssetDirsPrepared();//addAssetDirectory( "assets" );
-	setupNoiseTexture3D();
+    setupNoiseTexture3D();
+    CI_CHECK_GL();
 	setupShaders();
+    CI_CHECK_GL();
 	setupBuffers();
+    CI_CHECK_GL();
 
 	resetParticleSystem( 0.5f );
 
 	//CameraPersp cam( mMayaCam.getCamera() );
 	mCam.lookAt( vec3( 0.0f, 0.0f, -3.0f ), vec3( 0 ) );
 	//mCam.setCenterOfInterestPoint( vec3( 0 ) );
-	//cam.setNearClip( 0.10f );
-	//cam.setFarClip( 10.0f );
+	//mCam.setNearClip( 0.10f );
+	//mCam.setFarClip( 10.0f );
 	//mCamUi..setCurrentCam( cam );
 
 	mParams = params::InterfaceGl::create( "Settings", toPixels( ivec2( 225, 180 ) ) );
@@ -183,6 +189,7 @@ NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
 
 void NVidiaComputeParticlesApp::setupShaders()
 {
+    CI_CHECK_GL();
 	try {
 		mRenderProg = gl::GlslProg::create( gl::GlslProg::Format().vertex( loadAsset( "render.vs.glsl" ) )
 			.fragment( loadAsset( "render.fs.glsl" ) ) );
@@ -192,16 +199,16 @@ void NVidiaComputeParticlesApp::setupShaders()
         quit(); //???
 	}
 
+    CI_CHECK_GL();
 	try {
+        
         mUpdateProg = gl::GlslProg::create( gl::GlslProg::Format()
                                            .vertex( loadAsset( "particle_update.vs.glsl" ) )
                                            .feedbackFormat( GL_INTERLEAVED_ATTRIBS )
-                                           .feedbackVaryings( { "position", "velocity" } )
-                                           //.attribLocation( "iPosition", 0 )
-                                           //.attribLocation( "iColor", 1 )
-                                           //.attribLocation( "iPPosition", 2 )
-                                           //.attribLocation( "iHome", 3 )
-                                           //.attribLocation( "iDamping", 4 )
+                                           .feedbackVaryings( { "oPosition", "oVelocity", "gl_NextBuffer",
+                                                                "oQuadPosition1", "oQuadPosition2", "oQuadPosition3", "oQuadPosition4" } )
+                                           .attribLocation( "iPosition", 0 )
+                                           .attribLocation( "iVelocity", 1 )
                                            );
 	}
 	catch( gl::GlslProgCompileExc e ) {
@@ -209,6 +216,7 @@ void NVidiaComputeParticlesApp::setupShaders()
 		quit(); //???
 	}
 
+     CI_CHECK_GL();
 	mUpdateProg->uniform( "invNoiseSize", 1.0f / mNoiseSize );
 	mUpdateProg->uniform( "noiseTex3D", 0 );
 }
@@ -222,7 +230,8 @@ void NVidiaComputeParticlesApp::setupBuffers()
     mParticles[0] = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( Particle ), nullptr/*particles.data()*/, GL_STATIC_DRAW );
     mParticles[1] = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( Particle ), nullptr/*particles.data()*/, GL_STATIC_DRAW );
     //mVel = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof(Particle), nullptr, GL_STATIC_DRAW );
-    
+    mQuadPositions = gl::Vbo::create( GL_ARRAY_BUFFER, particles.size() * sizeof( vec4 ) * 4, nullptr, GL_STATIC_DRAW );
+
 
 	std::vector<uint32_t> indices( NUM_PARTICLES * 6 );
 	// the index buffer is a classic "two-tri quad" array.
@@ -295,11 +304,26 @@ void NVidiaComputeParticlesApp::draw()
 	gl::disable( GL_DEPTH_TEST );
 	gl::disable( GL_CULL_FACE );
 
-	//ScopedBufferBase scopedPosBuffer( mPos, 1 );
-
+	
 	{
+        //gl::ScopedBufferBase scopedPosBuffer( mPos, 1 );
+        //gl::ScopedBuffer scopedIndicex( mIndicesVbo );
         gl::ScopedBuffer scopedIndicex( mIndicesVbo );
-		gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 6, GL_UNSIGNED_INT, 0 );
+        //glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mIndicesVbo );
+        //glBindBuffer( GL_ARRAY_BUFFER, mIndicesVbo );
+        //gl::ScopedBuffer scopedPositions( mQuadPositions->getTarget(), 1 );
+        gl::ScopedBuffer scopedPositions( mQuadPositions );
+
+        glEnableVertexAttribArray( 0 );
+        glVertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
+
+        
+        gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 6, GL_UNSIGNED_INT, 0 );
+        
+        glDisableVertexAttribArray( 0 );
+        //gl::vertexAttribPointer( 0, 4, GL_FLOAT, GL_FALSE, sizeof( vec4 ), reinterpret_cast< const GLvoid *>( 0 ) );
+        
+		//gl::drawElements( GL_TRIANGLES, NUM_PARTICLES * 4, GL_FLOAT, 0 );
 	}
 
 	CI_CHECK_GL();
@@ -367,16 +391,18 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
     
 	// Invoke the compute shader to integrate the particles
 	gl::ScopedGlslProg prog( mUpdateProg );
+    gl::ScopedState rasterizer( GL_RASTERIZER_DISCARD, true );	// turn off fragment stage
 	mUpdateProg->uniform( "attractor", mShaderParams.attractor );
 	//mUpdateProg->uniform( "numParticles", static_cast<int>( mShaderParams.numParticles ) ); //fix this???
 	mUpdateProg->uniform( "numParticles", static_cast<float>( mShaderParams.numParticles ) ); //fix this???
-	mUpdateProg->uniform( "spriteSize", mShaderParams.spriteSize );
+	//mUpdateProg->uniform( "spriteSize", mShaderParams.spriteSize );
 	mUpdateProg->uniform( "damping", mShaderParams.damping );
 	mUpdateProg->uniform( "noiseFreq", mShaderParams.noiseFreq );
 	mUpdateProg->uniform( "noiseStrength", mShaderParams.noiseStrength );
 
 	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
 
+     CI_CHECK_GL();
 	//ScopedBufferBase scopedPosBuffer( mPos, 1 );
 	//ScopedBufferBase scopedVelBuffer( mVel, 2 );
 
@@ -390,17 +416,30 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
     gl::ScopedVao source( mAttributes[mSourceIndex] );
     // Bind destination as buffer base.
     gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 0, mParticles[mDestinationIndex] );
-    gl::beginTransformFeedback( GL_TRIANGLES );
+    gl::bindBufferBase( GL_TRANSFORM_FEEDBACK_BUFFER, 1, mQuadPositions );
+    gl::beginTransformFeedback( GL_POINTS );
+    
+    CI_CHECK_GL();
     
     // Draw source into destination, performing our vertex transformations.
-    gl::drawArrays( GL_TRIANGLES, 0, NUM_PARTICLES ); // NUM_PARTICLES * 6
+    gl::drawArrays( GL_POINTS, 0, NUM_PARTICLES ); // NUM_PARTICLES * 6
     
+    CI_CHECK_GL();
     gl::endTransformFeedback();
     
     // Swap source and destination for next loop
     std::swap( mSourceIndex, mDestinationIndex );
     
-    
+    /*
+    vec4 *quadPositions = static_cast<vec4 *>( mQuadPositions->map( GL_READ_ONLY ) );
+    {
+        for( size_t i = 0; i < ( NUM_PARTICLES ); ++i ) {
+            vec4 qp = quadPositions[i * 4];
+            ci::app::console() << i << ") " << qp << std::endl;
+        }
+    }
+    mQuadPositions->unmap();
+    //*/
     
 	CI_CHECK_GL();
 }
@@ -413,7 +452,7 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 	tex3dFmt.setWrapT( GL_REPEAT );
 	tex3dFmt.setMagFilter( GL_LINEAR );
 	tex3dFmt.setMinFilter( GL_LINEAR );
-	tex3dFmt.setInternalFormat( GL_RGBA );
+	//tex3dFmt.setInternalFormat( GL_RGBA );
 	tex3dFmt.setDataType( GL_FLOAT );
 	tex3dFmt.setInternalFormat( GL_RGBA8_SNORM );
 
@@ -433,10 +472,13 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
 			}
 		}
 	}
+    CI_CHECK_GL();
 	mNoiseTex = gl::Texture3d::create( mNoiseSize, mNoiseSize, mNoiseSize, tex3dFmt );
 	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
 
+    CI_CHECK_GL();
 	glPixelStorei( GL_UNPACK_ALIGNMENT, 1 );
+    CI_CHECK_GL();
 	glTexImage3D( mNoiseTex->getTarget(),
                   0,
                   mNoiseTex->getInternalFormat(),
@@ -444,9 +486,10 @@ void NVidiaComputeParticlesApp::setupNoiseTexture3D()
                   mNoiseTex->getHeight(),
                   mNoiseTex->getDepth(),
                   0.0f,
-                  tex3dFmt.getInternalFormat(),
-                  GL_FLOAT,//tex3dFmt.getDataType(), //!!! Possibly copy and paste bug!!!!
-                 data.data() );//&( data[0] ) );
+                  GL_RGBA,//GL_RGBA8_SNORM,//tex3dFmt.getInternalFormat(),
+                  tex3dFmt.getDataType(), //!!! Possibly copy and paste bug!!!!
+                  data.data() );//&( data[0] ) );
+    CI_CHECK_GL();
 }
 
 //CINDER_APP_NATIVE( NVidiaComputeParticlesApp, RendererGl )
@@ -454,3 +497,4 @@ CINDER_APP( NVidiaComputeParticlesApp, RendererGl(),
            [&]( App::Settings *settings ) {
                settings->setWindowSize( 1280, 720 );
            })
+#endif

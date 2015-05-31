@@ -31,16 +31,17 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //----------------------------------------------------------------------------------
-#version 430
-#extension GL_ARB_shader_storage_buffer_object : require
+#version 410
+//# extension GL_ARB_shader_storage_buffer_object : require
 
 uniform mat4 ciProjectionMatrix;
 uniform mat4 ciModelView;
 uniform float spriteSize;
 
-layout( std140, binding=1 ) buffer Pos {
-	vec4 pos[];
-};
+//layout( std140, binding=1 ) buffer Pos {
+//	vec4 pos[];
+//};
+in vec4 iPos;
 
 out gl_PerVertex {
 	vec4 gl_Position;
@@ -54,8 +55,8 @@ out block {
 void main()
 {
 	// expand points to quads without using GS
-	int particleID = gl_VertexID >> 2; // 4 vertices per particle
-	vec4 particlePos = pos[particleID];
+	//int particleID = gl_VertexID >> 2; // 4 vertices per particle
+    vec4 particlePos = iPos;//[particleID];
 
 	Out.color = vec4( 0.5, 0.2, 0.1, 1.0 );
 
@@ -67,4 +68,5 @@ void main()
 
 	Out.texCoord = quadPos;
 	gl_Position = ciProjectionMatrix * vertexPosEye;
+    //Out.color = vec4( 1, 0, 0, 1 );
 }
