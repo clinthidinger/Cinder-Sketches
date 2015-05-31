@@ -212,8 +212,7 @@ void NVidiaComputeParticlesApp::setupShaders()
     mParticleUpdateUbo->bindBufferBase( 0 );
     mUpdateProg->uniformBlock( "ParticleParams", 0 );
     
-    //!!!mUpdateProg->uniform( "invNoiseSize", 1.0f / mNoiseSize );
-	mUpdateProg->uniform( "noiseTex3D", 0 );
+    mUpdateProg->uniform( "noiseTex3D", 0 );
 }
 
 //------------------------------------------------------------------------------
@@ -370,19 +369,12 @@ void NVidiaComputeParticlesApp::updateParticleSystem()
 		mParticleParams.attractor.w = 0.0f;
 	}
     
-    //!!! Todo:  look at uniform buffer objects
-    
 	// Invoke the compute shader to integrate the particles.
 	gl::ScopedGlslProg prog( mUpdateProg );
     // Turn off fragment stage.
     gl::ScopedState rasterizer( GL_RASTERIZER_DISCARD, true );
     
     mParticleUpdateUbo->bufferSubData( 0, sizeof( mParticleParams ), &mParticleParams );
-	//mUpdateProg->uniform( "attractor", mShaderParams.attractor );
-	//mUpdateProg->uniform( "numParticles", static_cast<float>( mShaderParams.numParticles ) );
-	//mUpdateProg->uniform( "damping", mShaderParams.damping );
-	//mUpdateProg->uniform( "noiseFreq", mShaderParams.noiseFreq );
-	//mUpdateProg->uniform( "noiseStrength", mShaderParams.noiseStrength );
 
 	gl::ScopedTextureBind scoped3dTex( mNoiseTex );
 
