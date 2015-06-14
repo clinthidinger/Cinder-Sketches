@@ -89,12 +89,17 @@ class NVidiaComputeParticlesApp : public App
 {
 public:
     NVidiaComputeParticlesApp();
+    virtual ~NVidiaComputeParticlesApp();
+    NVidiaComputeParticlesApp( const NVidiaComputeParticlesApp &other ) = delete;
+    NVidiaComputeParticlesApp &operator= ( const NVidiaComputeParticlesApp &rhs ) = delete;
+    NVidiaComputeParticlesApp( const NVidiaComputeParticlesApp &&other ) = delete;
+    NVidiaComputeParticlesApp &operator= ( const NVidiaComputeParticlesApp &&rhs ) = delete;
     
-    virtual void	resize() override;
-    virtual void	update() override;
-    virtual void	draw() override;
-    virtual void	mouseDrag( MouseEvent event ) override;
-    virtual void	mouseDown( MouseEvent event ) override;
+    virtual void resize() override;
+    virtual void update() override;
+    virtual void draw() override;
+    virtual void mouseDrag( MouseEvent event ) override;
+    virtual void mouseDown( MouseEvent event ) override;
     
     void renderScene( gl::GlslProgRef effect );
     void setupShaders();
@@ -116,8 +121,8 @@ public:
     gl::VboRef mIndicesVbo;
     gl::UboRef mParticleUpdateUbo;
     
-    std::uint32_t	mSourceIndex		= 0;
-    std::uint32_t	mDestinationIndex	= 1;
+    std::uint32_t mSourceIndex		= 0;
+    std::uint32_t mDestinationIndex	= 1;
     
     gl::Texture3dRef mNoiseTex;
     params::InterfaceGlRef mParams;
@@ -165,6 +170,12 @@ NVidiaComputeParticlesApp::NVidiaComputeParticlesApp()
     mParams->addParam( "Noise frequency", &( mParticleParams.noiseFreq ) );// Range: 0.0f, 20.0f );
     mParams->addSeparator();
     mParams->addParam( "Reset", &mReset );
+}
+
+//------------------------------------------------------------------------------
+NVidiaComputeParticlesApp::~NVidiaComputeParticlesApp()
+{
+    
 }
 
 //------------------------------------------------------------------------------
@@ -266,8 +277,7 @@ void NVidiaComputeParticlesApp::setupBuffers()
 //------------------------------------------------------------------------------
 void NVidiaComputeParticlesApp::resize()
 {
-    float vfov = mCam.getFov();
-    mCam.setPerspective( vfov, getWindowAspectRatio(), mCam.getNearClip(), mCam.getFarClip() );
+    mCam.setPerspective( mCam.getFov(), getWindowAspectRatio(), mCam.getNearClip(), mCam.getFarClip() );
 }
 
 //------------------------------------------------------------------------------
